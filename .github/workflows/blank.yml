@@ -1,0 +1,101 @@
+% Loading data from csv file 
+twitterData = readtable('twitter_data.csv');
+
+ % Normalising sentiment labels, 0 for negative and 1 for positive
+twitterData.sentiment = twitterData.sentiment / 4;
+
+% shuffling the data
+numofRows = height(twitterData);
+shuffledIndi = randperm(numofRows);
+shuffledData = twitterData(shuffledIndi, :);
+
+% Select the first 5000 rows from shuffled data
+subData = shuffledData(1:5000, :);
+
+
+%preprocessing the data
+preProData = preprocessText(subData.text);
+
+% data gets split into training and testing set, 80% for testing and 20 for
+% training the models
+
+[trainInd, ~, testInd] = dividerand(height(subData), 0.8, 0, 0.2);
+trainData = subData(trainInd, :);
+testData = subData(testInd, :);
+
+% converting the data to bag of words representation
+
+bag = bagOfWords(preProData(trainInd));
+XTrain = encode(bag, preProData(trainInd));
+XTest = encode(bag, preProData(testInd));
+
+% getting sentiment labels for training and testing
+YTrain = trainData.sentiment;
+YTest = testData.sentiment;
+
+
+% training the svm model and making predictions on test set 
+svmModel = fitcsvm(full(XTrain), YTrain);
+svmPredictions = predict(svmModel, full(XTest));
+svmAccuracy = sum(svmPredictions == YTest) / numel(YTest) * 100;
+
+% training the naive bayes model and making predictions on test set 
+nbModel = fitcnb(XTrain, YTrain, 'DistributionNames', 'kernel', 'Width', 1e-3);
+nbPredictions = predict(nbModel, XTest);
+nbAccuracy = sum(nbPredictions == YTest) / numel(YTest) * 100;
+
+% prints out the accuracy of the models 
+fprintf('SVM Accuracy: %.2f%%\n', svmAccuracy);
+fprintf('Naive Bayes Accuracy: %.2f%%\n', nbAccuracy);
+
+
+% creation of confusion matrices for models 
+[svmConfusionM, ~] = confusionmat(YTest, svmPredictions);
+[nbConfusionM, ~] = confusionmat(YTest, nbPredictions);
+
+% calculates and then prints the precision, recall and f1 scores
+svmTP = svmConfusionM(2, 2);
+svmFP = svmConfusionM(1, 2);
+svmFN = svmConfusionM(2, 1);
+
+svmPrecision = svmTP / (svmTP + svmFP);
+svmRecall = svmTP / (svmTP + svmFN);
+svmF1 = 2 * (svmPrecision * svmRecall) / (svmPrecision + svmRecall);
+
+% calculates and then prints the precision, recall and f1 scores
+nbTP = nbConfusionM(2, 2);
+nbFP = nbConfusionM(1, 2);
+nbFN = nbConfusionM(2, 1);
+
+
+NaivePrecision = nbTP / (nbTP + nbFP);
+NaiveRecall = nbTP / (nbTP + nbFN);
+NaiveF1 = 2 * (NaivePrecision * NaiveRecall) / (NaivePrecision + NaiveRecall);
+
+
+fprintf('SVM Precision: %.2f\n', svmPrecision);
+fprintf('SVM Recall: %.2f\n', svmRecall);
+
+ fprintf('SVM F1 Score: %.2f\n', svmF1);
+fprintf('Naive Bayes Precision: %.2f\n', NaivePrecision);
+fprintf('Naive Bayes Recall: %.2f\n', NaiveRecall);
+
+fprintf('Naive Bayes F1 Score: %.2f\n', NaiveF1);
+
+
+
+% preprocessing function 
+function preprocessedText = preprocessText(textData)
+    % converts data to lower text
+    lowerText = lower(textData);
+
+
+    % removes any special characters 
+    cleanedText = regexprep(lowerText, '[^a-z0-9\s]', '');
+
+    % converts text to cell array 
+    cleanedText = cellstr(cleanedText);
+
+    % tokenized the text 
+    preprocessedText = tokenizedDocument(cleanedText);
+end
